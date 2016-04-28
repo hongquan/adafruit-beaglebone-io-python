@@ -332,6 +332,31 @@ int build_path(const char *partial_path, const char *prefix, char *full_path, si
     return 0;
 }
 
+int get_spi_bus_path_number(unsigned int spi)
+{
+  char path[50];
+  
+  build_path("/sys/devices", "ocp", ocp_dir, sizeof(ocp_dir));
+
+  if (spi == 0) {
+    snprintf(path, sizeof(path), "%s/48030000.spi/spi_master/spi1", ocp_dir);
+  } else {
+    snprintf(path, sizeof(path), "%s/481a0000.spi/spi_master/spi1", ocp_dir);
+  }
+  
+  DIR* dir = opendir(path);
+  if (dir) {
+    closedir(dir);
+    //device is using /dev/spidev1.x
+    return 1;
+  } else if (ENOENT == errno) {
+    //device is using /dev/spidev2.x
+    return 2;
+  } else {
+    return -1;
+  }
+}
+
 
 int load_device_tree(const char *name)
 {
@@ -373,6 +398,7 @@ int unload_device_tree(const char *name)
     char line[256];
     char *slot_line;
 
+    build_path("/sys/devices", "bone_capemgr", ctrl_dir, sizeof(ctrl_dir));
     snprintf(slots, sizeof(slots), "%s/slots", ctrl_dir);
 
     file = fopen(slots, "r+");

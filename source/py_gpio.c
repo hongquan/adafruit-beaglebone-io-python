@@ -33,7 +33,6 @@ SOFTWARE.
 #include "common.h"
 #include "event_gpio.h"
 
-static PyObject *bb_revision;
 static int gpio_warnings = 1;
 
 struct py_callback
@@ -75,7 +74,7 @@ static PyObject *py_setup_channel(PyObject *self, PyObject *args, PyObject *kwar
    char *channel;
    int direction;
    int pud = PUD_OFF;
-   int initial = -1;
+   int initial = 0;
    static char *kwlist[] = {"channel", "direction", "pull_up_down", "initial", NULL};
 
    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "si|ii", kwlist, &channel, &direction, &pud, &initial))
@@ -108,7 +107,11 @@ static PyObject *py_setup_channel(PyObject *self, PyObject *args, PyObject *kwar
 
    gpio_export(gpio);
    gpio_set_direction(gpio, direction);
-   gpio_set_value(gpio, pud);
+   if (direction == OUTPUT) {
+       gpio_set_value(gpio, initial);
+   } else {
+       gpio_set_value(gpio, pud);
+   }
 
    gpio_direction[gpio] = direction;
 
@@ -182,6 +185,10 @@ static void run_py_callbacks(unsigned int gpio)
          gettimeofday(&tv_timenow, NULL);
          timenow = tv_timenow.tv_sec*1E6 + tv_timenow.tv_usec;
          if (cb->bouncetime == 0 || timenow - cb->lastcall > cb->bouncetime*1000 || cb->lastcall == 0 || cb->lastcall > timenow) {
+            
+            // save lastcall before calling func to prevent reentrant bounce
+            cb->lastcall = timenow;
+            
             // run callback
             gstate = PyGILState_Ensure();
             result = PyObject_CallFunction(cb->py_cb, "s", cb->channel);
